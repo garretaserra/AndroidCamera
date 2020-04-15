@@ -5,12 +5,16 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.support.annotation.RequiresApi;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.text.TextUtils;
+import android.util.Base64;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -18,43 +22,55 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.VideoView;
 
+import com.android.volley.AuthFailureError;
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.VolleyLog;
+import com.android.volley.toolbox.StringRequest;
+import com.android.volley.toolbox.Volley;
 import com.karumi.dexter.Dexter;
 import com.karumi.dexter.MultiplePermissionsReport;
 import com.karumi.dexter.PermissionToken;
 import com.karumi.dexter.listener.PermissionRequest;
 import com.karumi.dexter.listener.multi.MultiplePermissionsListener;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
     // Activity request codes
     private static final int CAMERA_CAPTURE_IMAGE_REQUEST_CODE = 100;
-    private static final int CAMERA_CAPTURE_VIDEO_REQUEST_CODE = 200;
+//    private static final int CAMERA_CAPTURE_VIDEO_REQUEST_CODE = 200;
 
     // key to store image path in savedInstance state
     public static final String KEY_IMAGE_STORAGE_PATH = "image_path";
 
     public static final int MEDIA_TYPE_IMAGE = 1;
-    public static final int MEDIA_TYPE_VIDEO = 2;
+//    public static final int MEDIA_TYPE_VIDEO = 2;
 
     // Bitmap sampling size
-    public static final int BITMAP_SAMPLE_SIZE = 8;
+    public static final int BITMAP_SAMPLE_SIZE = 2;
 
     // Gallery directory name to store the images or videos
     public static final String GALLERY_DIRECTORY_NAME = "Hello Camera";
 
     // Image and Video file extensions
     public static final String IMAGE_EXTENSION = "jpg";
-    public static final String VIDEO_EXTENSION = "mp4";
+//    public static final String VIDEO_EXTENSION = "mp4";
 
     private static String imageStoragePath;
 
     private TextView txtDescription;
     private ImageView imgPreview;
-    private VideoView videoPreview;
-    private Button btnCapturePicture, btnRecordVideo;
+//    private VideoView videoPreview;
+    private Button btnCapturePicture;// btnRecordVideo;
 
 
     @Override
@@ -75,9 +91,9 @@ public class MainActivity extends AppCompatActivity {
 
         txtDescription = findViewById(R.id.txt_desc);
         imgPreview = findViewById(R.id.imgPreview);
-        videoPreview = findViewById(R.id.videoPreview);
+//        videoPreview = findViewById(R.id.videoPreview);
         btnCapturePicture = findViewById(R.id.btnCapturePicture);
-        btnRecordVideo = findViewById(R.id.btnRecordVideo);
+//        btnRecordVideo = findViewById(R.id.btnRecordVideo);
 
         /**
          * Capture image on button click
@@ -97,17 +113,17 @@ public class MainActivity extends AppCompatActivity {
         /**
          * Record video on button click
          */
-        btnRecordVideo.setOnClickListener(new View.OnClickListener() {
-
-            @Override
-            public void onClick(View v) {
-                if (CameraUtils.checkPermissions(getApplicationContext())) {
-                    captureVideo();
-                } else {
-                    requestCameraPermission(MEDIA_TYPE_VIDEO);
-                }
-            }
-        });
+//        btnRecordVideo.setOnClickListener(new View.OnClickListener() {
+//
+//            @Override
+//            public void onClick(View v) {
+//                if (CameraUtils.checkPermissions(getApplicationContext())) {
+//                    captureVideo();
+//                } else {
+//                    requestCameraPermission(MEDIA_TYPE_VIDEO);
+//                }
+//            }
+//        });
 
         // restoring storage image path from saved instance state
         // otherwise the path will be null on device rotation
@@ -124,9 +140,10 @@ public class MainActivity extends AppCompatActivity {
                 if (!TextUtils.isEmpty(imageStoragePath)) {
                     if (imageStoragePath.substring(imageStoragePath.lastIndexOf(".")).equals("." + IMAGE_EXTENSION)) {
                         previewCapturedImage();
-                    } else if (imageStoragePath.substring(imageStoragePath.lastIndexOf(".")).equals("." + VIDEO_EXTENSION)) {
-                        previewVideo();
                     }
+//                    else if (imageStoragePath.substring(imageStoragePath.lastIndexOf(".")).equals("." + VIDEO_EXTENSION)) {
+//                        previewVideo();
+//                    }
                 }
             }
         }
@@ -149,7 +166,7 @@ public class MainActivity extends AppCompatActivity {
                                 // capture picture
                                 captureImage();
                             } else {
-                                captureVideo();
+//                                captureVideo();
                             }
 
                         } else if (report.isAnyPermissionPermanentlyDenied()) {
@@ -208,28 +225,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Launching camera app to record video
-     */
-    private void captureVideo() {
-        Intent intent = new Intent(MediaStore.ACTION_VIDEO_CAPTURE);
-
-        File file = CameraUtils.getOutputMediaFile(MEDIA_TYPE_VIDEO);
-        if (file != null) {
-            imageStoragePath = file.getAbsolutePath();
-        }
-
-        Uri fileUri = CameraUtils.getOutputMediaFileUri(getApplicationContext(), file);
-
-        // set video quality
-        intent.putExtra(MediaStore.EXTRA_VIDEO_QUALITY, 1);
-
-        intent.putExtra(MediaStore.EXTRA_OUTPUT, fileUri); // set the image file
-
-        // start the video capture Intent
-        startActivityForResult(intent, CAMERA_CAPTURE_VIDEO_REQUEST_CODE);
-    }
-
-    /**
      * Activity result method will be called after closing the camera
      */
     @Override
@@ -254,25 +249,6 @@ public class MainActivity extends AppCompatActivity {
                         "Sorry! Failed to capture image", Toast.LENGTH_SHORT)
                         .show();
             }
-        } else if (requestCode == CAMERA_CAPTURE_VIDEO_REQUEST_CODE) {
-            if (resultCode == RESULT_OK) {
-                // Refreshing the gallery
-                CameraUtils.refreshGallery(getApplicationContext(), imageStoragePath);
-
-                // video successfully recorded
-                // preview the recorded video
-                previewVideo();
-            } else if (resultCode == RESULT_CANCELED) {
-                // user cancelled recording
-                Toast.makeText(getApplicationContext(),
-                        "User cancelled video recording", Toast.LENGTH_SHORT)
-                        .show();
-            } else {
-                // failed to record video
-                Toast.makeText(getApplicationContext(),
-                        "Sorry! Failed to record video", Toast.LENGTH_SHORT)
-                        .show();
-            }
         }
     }
 
@@ -283,14 +259,58 @@ public class MainActivity extends AppCompatActivity {
         try {
             // hide video preview
             txtDescription.setVisibility(View.GONE);
-            videoPreview.setVisibility(View.GONE);
 
             imgPreview.setVisibility(View.VISIBLE);
 
             Bitmap bitmap = CameraUtils.optimizeBitmap(BITMAP_SAMPLE_SIZE, imageStoragePath);
 
+            int width = bitmap.getWidth();
+            int height = bitmap.getHeight();
+            if(width < height)
+                bitmap = Bitmap.createBitmap(bitmap, 0,0,width, width);
+            else if (height < width)
+                bitmap = Bitmap.createBitmap(bitmap, 0,0,height, height);
+
+
+            bitmap = Bitmap.createScaledBitmap(bitmap, 500, 500, true);
+
+            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream);
+            byte[] byteArray = byteArrayOutputStream .toByteArray();
+            final String encoded = Base64.encodeToString(byteArray, Base64.DEFAULT);
+            Log.d("encoded", encoded);
+
             imgPreview.setImageBitmap(bitmap);
 
+            // Send Request
+            RequestQueue queue = Volley.newRequestQueue(this);
+            String url ="http://192.168.1.100:8080/mobile";
+            StringRequest stringRequest = new StringRequest(Request.Method.POST, url, new Response.Listener<String>() {
+                @Override
+                public void onResponse(String response) {
+                    TextView result = findViewById(R.id.result);
+                    result.setText(response);
+                    Log.i("VOLLEY", response);
+                }
+            }, new Response.ErrorListener() {
+                @Override
+                public void onErrorResponse(VolleyError error) {
+                    Log.e("VOLLEY", error.toString());
+                }
+            }) {
+                @Override
+                public String getBodyContentType() {
+                    return "application/json; charset=utf-8";
+                }
+
+                @RequiresApi(api = Build.VERSION_CODES.KITKAT)
+                @Override
+                public byte[] getBody(){
+                    return encoded == null ? null : encoded.getBytes();
+                }
+            };
+            // Add the request to the RequestQueue.
+            queue.add(stringRequest);
         } catch (NullPointerException e) {
             e.printStackTrace();
         }
@@ -299,20 +319,20 @@ public class MainActivity extends AppCompatActivity {
     /**
      * Displaying video in VideoView
      */
-    private void previewVideo() {
-        try {
-            // hide image preview
-            txtDescription.setVisibility(View.GONE);
-            imgPreview.setVisibility(View.GONE);
-
-            videoPreview.setVisibility(View.VISIBLE);
-            videoPreview.setVideoPath(imageStoragePath);
-            // start playing
-            videoPreview.start();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
+//    private void previewVideo() {
+//        try {
+//            // hide image preview
+//            txtDescription.setVisibility(View.GONE);
+//            imgPreview.setVisibility(View.GONE);
+//
+//            videoPreview.setVisibility(View.VISIBLE);
+//            videoPreview.setVideoPath(imageStoragePath);
+//            // start playing
+//            videoPreview.start();
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+//    }
 
     /**
      * Alert dialog to navigate to app settings

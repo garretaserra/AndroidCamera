@@ -61,7 +61,7 @@ public class CameraUtils {
      */
     public static boolean isDeviceSupportCamera(Context context) {
         if (context.getPackageManager().hasSystemFeature(
-                PackageManager.FEATURE_CAMERA)) {
+                PackageManager.FEATURE_CAMERA_ANY)) {
             // this device has a camera
             return true;
         } else {
@@ -111,16 +111,16 @@ public class CameraUtils {
                 Locale.getDefault()).format(new Date());
         File mediaFile;
         if (type == MainActivity.MEDIA_TYPE_IMAGE) {
-            mediaFile = new File(mediaStorageDir.getPath() + File.separator
+            return mediaFile = new File(mediaStorageDir.getPath() + File.separator
                     + "IMG_" + timeStamp + "." + MainActivity.IMAGE_EXTENSION);
-        } else if (type == MainActivity.MEDIA_TYPE_VIDEO) {
-            mediaFile = new File(mediaStorageDir.getPath() + File.separator
-                    + "VID_" + timeStamp + "." + MainActivity.VIDEO_EXTENSION);
-        } else {
-            return null;
         }
-
-        return mediaFile;
+//        else if (type == MainActivity.MEDIA_TYPE_VIDEO) {
+//            mediaFile = new File(mediaStorageDir.getPath() + File.separator
+//                    + "VID_" + timeStamp + "." + MainActivity.VIDEO_EXTENSION);
+//        } else {
+//            return null;
+//        }
+        return null;
     }
 
 }
